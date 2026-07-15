@@ -35,7 +35,7 @@ npm install
 npm start
 ```
 
-Then open **http://localhost:3001**.
+Then open **https://docedit-x80b.onrender.com**.
 
 You'll land on a login screen — click "Continue as Alice / Bob / Carol" to pick a seeded account. Use two different browser windows (or one normal + one incognito) logged in as two different users to try the sharing flow end-to-end.
 

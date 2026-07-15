@@ -1,11 +1,5 @@
 // db.js
-// -----------------------------------------------------------------------------
-// Very small file-based data store. Chosen deliberately over SQLite/Postgres so
-// the project has zero native dependencies and "npm install" never has to
-// compile anything on a reviewer's machine. Trade-off: no real concurrency
-// control, no query language, all data loaded into memory. Fine for this scope
-// (single-process demo app, small doc counts). See ARCHITECTURE.md.
-// -----------------------------------------------------------------------------
+
 const fs = require('fs');
 const path = require('path');
 
@@ -46,8 +40,6 @@ function save(data) {
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), 'utf-8');
 }
 
-// In-memory cache, persisted to disk on every mutation. Simple and predictable
-// for a single-process app; not safe for multiple server instances.
 let data = load();
 
 function getData() {
@@ -72,7 +64,4 @@ function resetForTests(customData) {
 
 module.exports = { getData, persist, resetForTests, DB_PATH };
 
-// function resetForTests(customData) {
-//   data = customData || defaultData();
-// }
 

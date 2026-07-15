@@ -1,12 +1,5 @@
 // server.js
-// -----------------------------------------------------------------------------
-// Express server. Auth is intentionally simulated: the frontend lets a
-// reviewer pick one of three seeded users, then sends that user's id in the
-// `x-user-id` header on every request. There is no password/session system.
-// This is a stated scope cut (see ARCHITECTURE.md) — building real auth was
-// judged lower-value than fully working editing/sharing/upload for this
-// exercise.
-// -----------------------------------------------------------------------------
+
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');

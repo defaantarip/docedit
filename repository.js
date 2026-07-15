@@ -1,9 +1,5 @@
 // repository.js
-// -----------------------------------------------------------------------------
-// All access-control and CRUD logic lives here, separate from HTTP routing, so
-// it can be unit tested without spinning up an Express server (see
-// test/repository.test.js).
-// -----------------------------------------------------------------------------
+
 const crypto = require('crypto');
 const { getData, persist } = require('./db');
 

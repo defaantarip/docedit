@@ -35,7 +35,7 @@ Quick-reference checklist for reviewers, mirroring the assignment's deliverables
 | Formatting preserved | ✅ Working | Content stored as HTML |
 | Shared access demonstrable | ✅ Working | See "Trying the sharing flow" in `README.md` |
 | Setup/run instructions | ✅ Included | `README.md` |
-| Working deployment | ⬜ **Pending — add your URL** | |
+| Working deployment | ⬜ **https://docedit-x80b.onrender.com** | |
 | Validation and error handling | ✅ Working | Server returns 400/401/403/404 with messages; frontend surfaces them in an error banner |
 | At least one automated test | ✅ Included, exceeded | 11 tests across `test/repository.test.js` and `test/importText.test.js`, run with `npm test` |
 | Architecture note | ✅ Included | `ARCHITECTURE.md` |

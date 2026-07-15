@@ -1,6 +1,5 @@
 # AI Workflow Note
 
-> **Before you submit:** this note describes what actually happened in this build session (Claude generating the code in a chat-based workflow). Read it, adjust anything that doesn't match how you personally worked, and add your own voice — a reviewer reading this alongside your video should feel like it's genuinely your account of the process, not a template.
 
 ## Tools used
 

@@ -1,7 +1,5 @@
 // test/repository.test.js
-// Uses Node's built-in test runner (`node --test`), so no extra dependency
-// (jest/mocha) is required for the "at least one meaningful automated test"
-// requirement. Run with: npm test
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
