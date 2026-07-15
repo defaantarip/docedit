@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>docedit — Dashboard</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <h1>docedit</h1>
+    <div class="user-badge">
+      <span id="whoami"></span>
+      <button id="logout-btn">Switch user</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="error" class="error-banner"></div>
+
+    <div class="actions-row">
+      <button class="primary" id="new-doc-btn">+ New document</button>
+      <button id="upload-btn">Upload file (.txt / .md)</button>
+      <input type="file" id="file-input" accept=".txt,.md" style="display:none" />
+    </div>
+    <p class="hint">File upload only supports plain text (.txt) and Markdown (.md), imported as plain paragraphs — formatting is not parsed from the file. You can then format the text using the editor.</p>
+
+    <div class="doc-section">
+      <h3>My documents</h3>
+      <ul class="doc-list" id="owned-list"></ul>
+      <div id="owned-empty" class="empty-state" style="display:none">You don't have any documents yet. Create one above.</div>
+    </div>
+
+    <div class="doc-section">
+      <h3>Shared with me</h3>
+      <ul class="doc-list" id="shared-list"></ul>
+      <div id="shared-empty" class="empty-state" style="display:none">No documents have been shared with you yet.</div>
+    </div>
+  </div>
+
+  <!-- Delete / leave confirmation modal -->
+  <div class="modal-backdrop" id="confirm-modal" style="display:none">
+    <div class="modal">
+      <h3 id="confirm-title">Delete document?</h3>
+      <p id="confirm-message" class="hint"></p>
+      <div id="confirm-error" class="error-banner"></div>
+      <div class="modal-actions">
+        <button id="confirm-cancel-btn">Cancel</button>
+        <button class="danger" id="confirm-ok-btn">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/api.js"></script>
+  <script>
+    const errorEl = document.getElementById('error');
+    let currentUser;
+
+    function formatDate(iso) {
+      return new Date(iso).toLocaleString();
+    }
+
+    function renderList(container, emptyEl, docs, { showBadge, isOwned }) {
+      container.innerHTML = '';
+      if (!docs.length) {
+        emptyEl.style.display = 'block';
+        return;
+      }
+      emptyEl.style.display = 'none';
+      docs
+        .slice()
+        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+        .forEach(doc => {
+          const li = document.createElement('li');
+          const left = document.createElement('div');
+          const link = document.createElement('a');
+          link.href = `/editor.html?id=${doc.id}`;
+          link.textContent = doc.title;
+          left.appendChild(link);
+          if (showBadge && doc.permission) {
+            const badge = document.createElement('span');
+            badge.className = 'badge' + (doc.permission === 'view' ? ' view' : '');
+            badge.textContent = doc.permission === 'view' ? 'view only' : 'can edit';
+            left.appendChild(badge);
+          }
+
+          const right = document.createElement('div');
+          right.style.display = 'flex';
+          right.style.alignItems = 'center';
+          right.style.gap = '12px';
+
+          const meta = document.createElement('div');
+          meta.className = 'doc-meta';
+          meta.textContent = `Updated ${formatDate(doc.updatedAt)}`;
+          right.appendChild(meta);
+
+          const removeBtn = document.createElement('button');
+          removeBtn.className = 'remove-btn';
+          removeBtn.setAttribute('aria-label', isOwned ? 'Delete document' : 'Remove from shared with me');
+          removeBtn.title = isOwned ? 'Delete document' : 'Remove from shared with me';
+          removeBtn.textContent = '\u00D7'; // ×
+          removeBtn.onclick = () => openConfirmModal(doc, isOwned);
+          right.appendChild(removeBtn);
+
+          li.appendChild(left);
+          li.appendChild(right);
+          container.appendChild(li);
+        });
+    }
+
+    async function loadDocuments() {
+      try {
+        const { owned, shared } = await api('/api/documents');
+        renderList(document.getElementById('owned-list'), document.getElementById('owned-empty'), owned, { showBadge: false, isOwned: true });
+        renderList(document.getElementById('shared-list'), document.getElementById('shared-empty'), shared, { showBadge: true, isOwned: false });
+      } catch (err) {
+        showError(errorEl, err);
+      }
+    }
+
+    // ---- Delete / leave confirmation modal ----
+    let pendingAction = null; // { doc, isOwned }
+
+    function openConfirmModal(doc, isOwned) {
+      pendingAction = { doc, isOwned };
+      clearError(document.getElementById('confirm-error'));
+      document.getElementById('confirm-title').textContent = isOwned
+        ? 'Delete document?'
+        : 'Remove from shared with me?';
+      document.getElementById('confirm-message').textContent = isOwned
+        ? `"${doc.title}" will be permanently deleted for everyone it was shared with. This cannot be undone.`
+        : `"${doc.title}" will be removed from your list. The owner keeps their document — this only removes your access. You can be re-shared with it later if needed.`;
+      document.getElementById('confirm-ok-btn').textContent = isOwned ? 'Delete' : 'Remove';
+      document.getElementById('confirm-modal').style.display = 'flex';
+    }
+
+    function closeConfirmModal() {
+      pendingAction = null;
+      document.getElementById('confirm-modal').style.display = 'none';
+    }
+
+    async function confirmPendingAction() {
+      if (!pendingAction) return;
+      const { doc, isOwned } = pendingAction;
+      const confirmErrorEl = document.getElementById('confirm-error');
+      clearError(confirmErrorEl);
+      try {
+        if (isOwned) {
+          await api(`/api/documents/${doc.id}`, { method: 'DELETE' });
+        } else {
+          // "Leave" a shared document = revoke my own share for it.
+          await api(`/api/documents/${doc.id}/shares/${currentUser.id}`, { method: 'DELETE' });
+        }
+        closeConfirmModal();
+        await loadDocuments();
+      } catch (err) {
+        showError(confirmErrorEl, err);
+      }
+    }
+
+    async function init() {
+      currentUser = requireLogin();
+      if (!currentUser) return;
+      document.getElementById('whoami').textContent = `Signed in as ${currentUser.name}`;
+      document.getElementById('logout-btn').onclick = logout;
+
+      document.getElementById('new-doc-btn').onclick = async () => {
+        clearError(errorEl);
+        try {
+          const doc = await api('/api/documents', {
+            method: 'POST',
+            body: JSON.stringify({ title: 'Untitled document', content: '' })
+          });
+          window.location.href = `/editor.html?id=${doc.id}`;
+        } catch (err) {
+          showError(errorEl, err);
+        }
+      };
+
+      const fileInput = document.getElementById('file-input');
+      document.getElementById('upload-btn').onclick = () => fileInput.click();
+      fileInput.onchange = async () => {
+        clearError(errorEl);
+        const file = fileInput.files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'x-user-id': currentUser.id },
+            body: formData
+          });
+          const body = await res.json();
+          if (!res.ok) throw new Error(body.error || 'Upload failed');
+          window.location.href = `/editor.html?id=${body.id}`;
+        } catch (err) {
+          showError(errorEl, err);
+        } finally {
+          fileInput.value = '';
+        }
+      };
+
+      document.getElementById('confirm-cancel-btn').onclick = closeConfirmModal;
+      document.getElementById('confirm-ok-btn').onclick = confirmPendingAction;
+
+      await loadDocuments();
+    }
+    init();
+  </script>
+</body>
+</html>

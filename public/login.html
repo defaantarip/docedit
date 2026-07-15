@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>docedit — Log in</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="login-card">
+    <h2>docedit</h2>
+    <p class="hint">Pick a seeded account to review as. No password — this is a simulated login for demo purposes (see README).</p>
+    <div id="error" class="error-banner"></div>
+    <div id="user-list" class="user-list"></div>
+  </div>
+
+  <script src="/api.js"></script>
+  <script>
+    const errorEl = document.getElementById('error');
+
+    async function init() {
+      // If already "logged in", skip straight to the dashboard.
+      if (getCurrentUser()) {
+        window.location.href = '/index.html';
+        return;
+      }
+      try {
+        const users = await api('/api/users');
+        const list = document.getElementById('user-list');
+        list.innerHTML = '';
+        users.forEach(user => {
+          const btn = document.createElement('button');
+          btn.className = 'primary';
+          btn.textContent = `Continue as ${user.name}`;
+          btn.onclick = () => {
+            setCurrentUser(user);
+            window.location.href = '/index.html';
+          };
+          list.appendChild(btn);
+        });
+      } catch (err) {
+        showError(errorEl, err);
+      }
+    }
+    init();
+  </script>
+</body>
+</html>

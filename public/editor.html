@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>docedit — Editor</title>
+<link rel="stylesheet" href="/style.css" />
+<link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet" />
+</head>
+<body>
+  <div class="editor-header">
+    <a class="back-link" href="/index.html">&larr; Back</a>
+    <input type="text" id="title-input" class="title-input" placeholder="Untitled document" />
+    <span class="save-status" id="save-status"></span>
+    <button id="share-btn" style="display:none">Share</button>
+  </div>
+
+  <div class="container">
+    <div id="error" class="error-banner"></div>
+  </div>
+
+  <div id="editor-container">
+    <div id="quill-editor"></div>
+  </div>
+
+  <!-- Share modal -->
+  <div class="modal-backdrop" id="share-modal" style="display:none">
+    <div class="modal">
+      <h3>Share this document</h3>
+      <div id="share-error" class="error-banner"></div>
+      <label>Share with</label>
+      <select id="share-user-select"></select>
+      <label>Permission</label>
+      <select id="share-permission-select">
+        <option value="view">Can view</option>
+        <option value="edit">Can edit</option>
+      </select>
+      <div class="share-list" id="share-list"></div>
+      <div class="modal-actions">
+        <button id="share-close-btn">Close</button>
+        <button class="primary" id="share-grant-btn">Grant access</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+  <script src="/api.js"></script>
+  <script>
+    const errorEl = document.getElementById('error');
+    const params = new URLSearchParams(window.location.search);
+    const docId = params.get('id');
+    let currentUser, currentDoc, quill, saveTimer;
+
+    if (!docId) {
+      window.location.href = '/index.html';
+    }
+
+    function setSaveStatus(text) {
+      document.getElementById('save-status').textContent = text;
+    }
+
+    async function loadDocument() {
+      currentDoc = await api(`/api/documents/${docId}`);
+      document.getElementById('title-input').value = currentDoc.title;
+      quill.root.innerHTML = currentDoc.content || '';
+      const isOwner = currentDoc.permission === 'owner';
+      const isViewOnly = currentDoc.permission === 'view';
+      document.getElementById('share-btn').style.display = isOwner ? 'inline-block' : 'none';
+      document.getElementById('title-input').disabled = isViewOnly;
+      quill.enable(!isViewOnly);
+      if (isViewOnly) setSaveStatus('View only');
+    }
+
+    function scheduleSave() {
+      if (currentDoc.permission === 'view') return;
+      setSaveStatus('Saving…');
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(doSave, 600);
+    }
+
+    async function doSave() {
+      try {
+        const title = document.getElementById('title-input').value;
+        const content = quill.root.innerHTML;
+        await api(`/api/documents/${docId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ title, content })
+        });
+        setSaveStatus('Saved');
+      } catch (err) {
+        setSaveStatus('Save failed');
+        showError(errorEl, err);
+      }
+    }
+
+    // ---- Sharing modal ----
+    async function openShareModal() {
+      clearError(document.getElementById('share-error'));
+      document.getElementById('share-modal').style.display = 'flex';
+      await refreshShareList();
+      const users = await api('/api/users');
+      const select = document.getElementById('share-user-select');
+      select.innerHTML = '';
+      users
+        .filter(u => u.id !== currentUser.id)
+        .forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = u.name;
+          select.appendChild(opt);
+        });
+    }
+
+    async function refreshShareList() {
+      const shares = await api(`/api/documents/${docId}/shares`);
+      const list = document.getElementById('share-list');
+      list.innerHTML = '';
+      if (!shares.length) {
+        list.innerHTML = '<div class="hint">Not shared with anyone yet.</div>';
+        return;
+      }
+      shares.forEach(s => {
+        const row = document.createElement('div');
+        row.className = 'share-row';
+        row.innerHTML = `<span>${s.user ? s.user.name : 'Unknown user'} — ${s.permission}</span>`;
+        const revokeBtn = document.createElement('button');
+        revokeBtn.textContent = 'Revoke';
+        revokeBtn.className = 'danger';
+        revokeBtn.onclick = async () => {
+          await api(`/api/documents/${docId}/shares/${s.userId}`, { method: 'DELETE' });
+          await refreshShareList();
+        };
+        row.appendChild(revokeBtn);
+        list.appendChild(row);
+      });
+    }
+
+    async function init() {
+      currentUser = requireLogin();
+      if (!currentUser) return;
+
+      quill = new Quill('#quill-editor', {
+        theme: 'snow',
+        modules: {
+          toolbar: [
+            [{ header: [1, 2, 3, false] }],
+            ['bold', 'italic', 'underline'],
+            [{ list: 'ordered' }, { list: 'bullet' }],
+            ['clean']
+          ]
+        }
+      });
+
+      try {
+        await loadDocument();
+      } catch (err) {
+        showError(errorEl, err);
+        return;
+      }
+
+      quill.on('text-change', scheduleSave);
+      document.getElementById('title-input').addEventListener('input', scheduleSave);
+
+      document.getElementById('share-btn').onclick = openShareModal;
+      document.getElementById('share-close-btn').onclick = () => {
+        document.getElementById('share-modal').style.display = 'none';
+      };
+      document.getElementById('share-grant-btn').onclick = async () => {
+        clearError(document.getElementById('share-error'));
+        try {
+          const targetUserId = document.getElementById('share-user-select').value;
+          const permission = document.getElementById('share-permission-select').value;
+          await api(`/api/documents/${docId}/shares`, {
+            method: 'POST',
+            body: JSON.stringify({ targetUserId, permission })
+          });
+          await refreshShareList();
+        } catch (err) {
+          showError(document.getElementById('share-error'), err);
+        }
+      };
+    }
+    init();
+  </script>
+</body>
+</html>
